@@ -55,16 +55,14 @@
                         <div class="source-name">USGS Earthquakes</div>
                         <div class="source-info">Real-time global earthquake data</div>
                     </div>
-                    <div class="source-card">
-                        <div class="source-icon">🌊</div>
-                        <div class="source-name">IOC Water Levels</div>
-                        <div class="source-info">Global tide gauge stations</div>
-                    </div>
-                    <div class="source-card">
-                        <div class="source-icon">📊</div>
-                        <div class="source-name">NOAA Buoys</div>
-                        <div class="source-info">USA coastal water data</div>
-                    </div>
+                </div>
+            </section>
+
+            <!-- Foreshock Alerts Section -->
+            <section class="foreshock-section">
+                <h2>⚡ Foreshock Analysis</h2>
+                <div id="foreshockAlerts" class="foreshock-alerts-container">
+                    <p class="text-muted">No foreshock clusters detected</p>
                 </div>
             </section>
 
@@ -99,31 +97,6 @@
                         <tbody id="alertsTableBody">
                             <tr class="empty-row">
                                 <td colspan="8">Loading earthquake data...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Water Levels Section -->
-            <section class="alerts-section">
-                <h2>Water Level Monitoring Stations</h2>
-                <div class="table-container">
-                    <table class="alerts-table">
-                        <thead>
-                            <tr>
-                                <th>Station</th>
-                                <th>Country/State</th>
-                                <th>Latitude</th>
-                                <th>Longitude</th>
-                                <th>Water Level</th>
-                                <th>Source</th>
-                                <th>Updated</th>
-                            </tr>
-                        </thead>
-                        <tbody id="waterLevelBody">
-                            <tr class="empty-row">
-                                <td colspan="7">Loading water level data...</td>
                             </tr>
                         </tbody>
                     </table>

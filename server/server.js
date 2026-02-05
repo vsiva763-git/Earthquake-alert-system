@@ -1,6 +1,6 @@
 /**
  * Earthquake Alert System - Backend Server (API Data Aggregator)
- * Real-time data from USGS Earthquakes API, IOC Water Levels, NOAA Buoys
+ * Real-time data from USGS Earthquakes API
  */
 
 const express = require('express');
@@ -24,13 +24,9 @@ const ALERT_THRESHOLD = 4.0; // Magnitude threshold for alert (Richter scale)
 // Data Source URLs
 const USGS_EARTHQUAKE_API = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/1.0_day.geojson';
 const USGS_SIGNIFICANT_API = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.geojson';
-const IOC_WATER_LEVEL_API = 'https://www.ioc-sealevelmonitoring.org/api/v1/station/';
-const NOAA_STATIONS_API = 'https://api.waterlevels.noaa.gov/api/stations/';
-const NOAA_PREDICTIONS_API = 'https://api.waterlevels.noaa.gov/api/predictions/';
 
 // Polling intervals (in milliseconds)
 const EARTHQUAKE_POLL_INTERVAL = 60000; // 1 minute
-const WATER_LEVEL_POLL_INTERVAL = 300000; // 5 minutes
 
 // ==================== MIDDLEWARE ====================
 app.use(cors());
@@ -41,7 +37,6 @@ app.use(express.static(path.join(__dirname, '../public')));
 class AlertSystem {
   constructor() {
     this.earthquakes = [];
-    this.waterLevels = [];
     this.stats = {
       totalEarthquakes: 0,
       maxMagnitude: 0,
@@ -49,7 +44,7 @@ class AlertSystem {
       lastEarthquakeTime: null,
       dataStatus: 'INITIALIZING',
       lastUpdated: new Date(),
-      dataSource: 'USGS + IOC/NOAA'
+      dataSource: 'USGS'
     };
     this.connectedDevices = 0;
     this.monitoringRegions = [
@@ -89,34 +84,196 @@ class AlertSystem {
     return earthquake;
   }
 
-  addWaterLevel(data) {
-    const waterLevel = {
-      timestamp: new Date(),
-      ...data
-    };
-
-    this.waterLevels.push(waterLevel);
-    
-    // Keep only last 500 readings
-    if (this.waterLevels.length > 500) {
-      this.waterLevels.shift();
-    }
-
-    return waterLevel;
-  }
-
   updateAverageMagnitude() {
     if (this.earthquakes.length === 0) return;
     const sum = this.earthquakes.reduce((acc, eq) => acc + eq.magnitude, 0);
     this.stats.averageMagnitude = (sum / this.earthquakes.length).toFixed(2);
   }
 
+  // ==================== FORESHOCK DETECTION ====================
+  
+  detectClusters(timeWindowMinutes = 1440, spatialRadiusKm = 100) {
+    /**
+     * Detect earthquake clusters within a time and spatial window
+     * Returns clusters of earthquakes in the last 24 hours within 100km radius
+     */
+    const now = Date.now();
+    const timeWindowMs = timeWindowMinutes * 60 * 1000;
+    const clusters = [];
+
+    for (let i = 0; i < this.earthquakes.length; i++) {
+      const eq = this.earthquakes[i];
+      const timeDiff = now - eq.received_at;
+
+      // Only consider earthquakes within time window
+      if (timeDiff > timeWindowMs) break;
+
+      // Check if this earthquake is part of existing cluster
+      let foundCluster = false;
+      for (let cluster of clusters) {
+        for (let member of cluster.members) {
+          const distance = this.calculateDistance(
+            eq.latitude, eq.longitude,
+            member.latitude, member.longitude
+          );
+          
+          if (distance < spatialRadiusKm) {
+            cluster.members.push(eq);
+            cluster.magnitude_trend = this.analyzeMagnitudeTrend(cluster.members);
+            cluster.last_update = new Date();
+            foundCluster = true;
+            break;
+          }
+        }
+        if (foundCluster) break;
+      }
+
+      // Create new cluster if not found
+      if (!foundCluster) {
+        clusters.push({
+          id: clusters.length + 1,
+          center_lat: eq.latitude,
+          center_lon: eq.longitude,
+          members: [eq],
+          member_count: 1,
+          magnitude_trend: 'stable',
+          min_magnitude: eq.magnitude,
+          max_magnitude: eq.magnitude,
+          avg_magnitude: eq.magnitude,
+          foreshock_probability: 0,
+          main_shock_eta: null,
+          created_at: new Date(eq.received_at),
+          last_update: new Date()
+        });
+      }
+    }
+
+    // Update cluster statistics and calculate probabilities
+    for (let cluster of clusters) {
+      cluster.member_count = cluster.members.length;
+      const mags = cluster.members.map(m => m.magnitude);
+      cluster.min_magnitude = Math.min(...mags);
+      cluster.max_magnitude = Math.max(...mags);
+      cluster.avg_magnitude = (mags.reduce((a, b) => a + b) / mags.length).toFixed(2);
+      cluster.foreshock_probability = this.calculateForecastProbability(cluster);
+    }
+
+    return clusters.filter(c => c.member_count >= 2); // Only return clusters with 2+ events
+  }
+
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    /**
+     * Calculate distance between two coordinates using Haversine formula
+     * Returns distance in kilometers
+     */
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  analyzeMagnitudeTrend(earthquakes) {
+    /**
+     * Analyze if magnitude is increasing in a cluster
+     * Returns: 'increasing', 'decreasing', or 'stable'
+     */
+    if (earthquakes.length < 2) return 'stable';
+    
+    const sorted = [...earthquakes].sort((a, b) => b.received_at - a.received_at); // Most recent first
+    const recent = sorted.slice(0, Math.min(5, sorted.length));
+    
+    const avgRecent = recent.reduce((a, b) => a + b.magnitude, 0) / recent.length;
+    const avgOlder = this.earthquakes.slice(5, 10).reduce((a, b) => a + b.magnitude, 0) / Math.min(5, this.earthquakes.length - 5);
+    
+    if (avgRecent > avgOlder + 0.3) return 'increasing';
+    if (avgRecent < avgOlder - 0.3) return 'decreasing';
+    return 'stable';
+  }
+
+  calculateForecastProbability(cluster) {
+    /**
+     * Calculate probability of main shock within 24 hours
+     * Based on: cluster size, magnitude trend, temporal distribution
+     * Returns probability (0-100%)
+     */
+    let probability = 0;
+
+    // Factor 1: Cluster size (more events = higher probability)
+    const sizeScore = Math.min(cluster.member_count / 10, 1) * 25;
+    
+    // Factor 2: Magnitude trend
+    const trendScore = cluster.magnitude_trend === 'increasing' ? 30 : 
+                       cluster.magnitude_trend === 'stable' ? 15 : 5;
+    
+    // Factor 3: Magnitude range (larger spread = higher probability)
+    const magRange = cluster.max_magnitude - cluster.min_magnitude;
+    const rangeScore = Math.min(magRange / 2, 1) * 20;
+    
+    // Factor 4: Time concentration (events close together in time = higher probability)
+    const timeDiffs = [];
+    for (let i = 0; i < cluster.members.length - 1; i++) {
+      timeDiffs.push(cluster.members[i].received_at - cluster.members[i + 1].received_at);
+    }
+    const avgTimeDiff = timeDiffs.length > 0 ? timeDiffs.reduce((a, b) => a + b) / timeDiffs.length : 0;
+    const timeConcentration = avgTimeDiff < 3600000 ? 25 : avgTimeDiff < 86400000 ? 15 : 5; // < 1hr, < 24hr, > 24hr
+    
+    // Factor 5: Maximum magnitude in cluster
+    const magScore = Math.min(cluster.max_magnitude / 7, 1) * 20;
+
+    probability = sizeScore + trendScore + rangeScore + timeConcentration + magScore;
+    return Math.min(Math.round(probability), 100);
+  }
+
+  getForecast(hours = 24) {
+    /**
+     * Get 24-hour forecast data based on cluster analysis
+     * Returns forecast information including probability of main shock
+     */
+    const clusters = this.detectClusters(hours * 60, 100);
+    const alerts = [];
+
+    for (let cluster of clusters) {
+      if (cluster.foreshock_probability > 30) {
+        alerts.push({
+          alert_level: cluster.foreshock_probability > 60 ? 'HIGH' : 'MODERATE',
+          probability: cluster.foreshock_probability,
+          cluster_id: cluster.id,
+          cluster_size: cluster.member_count,
+          location: {
+            lat: cluster.center_lat,
+            lon: cluster.center_lon
+          },
+          magnitude_range: `${cluster.min_magnitude.toFixed(1)} - ${cluster.max_magnitude.toFixed(1)}`,
+          trend: cluster.magnitude_trend,
+          recent_activity: cluster.last_update,
+          forecast_hours: hours
+        });
+      }
+    }
+
+    return {
+      forecast_generated_at: new Date(),
+      forecast_window_hours: hours,
+      total_clusters: clusters.length,
+      alerts: alerts.sort((a, b) => b.probability - a.probability),
+      summary: {
+        high_probability_events: alerts.filter(a => a.alert_level === 'HIGH').length,
+        moderate_probability_events: alerts.filter(a => a.alert_level === 'MODERATE').length,
+        max_probability: alerts.length > 0 ? Math.max(...alerts.map(a => a.probability)) : 0
+      }
+    };
+  }
+
   getStats() {
     return {
       ...this.stats,
       totalInHistory: this.earthquakes.length,
-      waterLevelReadings: this.waterLevels.length,
-      connectedClients: this.connectedDevices
+      connectedClients: this.connectedDevices,
+      forecast: this.getForecast(24) // Include 24-hour forecast in stats
     };
   }
 
@@ -140,8 +297,9 @@ wss.on('connection', (ws) => {
     type: 'init',
     data: {
       earthquakes: alertSystem.earthquakes,
-      waterLevels: alertSystem.waterLevels.slice(-50), // Last 50 readings
-      stats: alertSystem.getStats()
+      stats: alertSystem.getStats(),
+      forecast: alertSystem.getForecast(24),
+      foreshocks: alertSystem.detectClusters()
     }
   }));
 
@@ -204,6 +362,26 @@ async function fetchUSGSEarthquakes() {
           data: earthquake
         });
 
+        // Check for foreshock clusters and broadcast alerts
+        const clusters = alertSystem.detectClusters(1440, 100); // 24-hour window, 100km radius
+        const alerts = clusters.filter(c => c.foreshock_probability > 30);
+        
+        if (alerts.length > 0) {
+          broadcastUpdate({
+            type: 'foreshock_alert',
+            data: {
+              high_probability: alerts.filter(a => a.foreshock_probability > 60),
+              moderate_probability: alerts.filter(a => a.foreshock_probability >= 30 && a.foreshock_probability <= 60)
+            }
+          });
+        }
+
+        // Broadcast updated forecast
+        broadcastUpdate({
+          type: 'forecast_update',
+          data: alertSystem.getForecast(24)
+        });
+
         // Log significant earthquakes
         if (props.mag >= ALERT_THRESHOLD) {
           console.log(`🌍 ALERT: Magnitude ${props.mag} - ${props.place}`);
@@ -222,108 +400,11 @@ async function fetchUSGSEarthquakes() {
   }
 }
 
-/**
- * Fetch water level data from IOC stations
- */
-async function fetchIOCWaterLevels() {
-  try {
-    // IOC Sealevel Monitoring data
-    const response = await axios.get(IOC_WATER_LEVEL_API, {
-      timeout: 10000
-    });
-
-    const stations = response.data || [];
-    
-    stations.slice(0, 20).forEach(station => {
-      if (station.latest_data) {
-        alertSystem.addWaterLevel({
-          station: station.station_code,
-          name: station.station_name,
-          latitude: station.latitude,
-          longitude: station.longitude,
-          level: station.latest_data.water_level,
-          timestamp: station.latest_data.timestamp,
-          source: 'IOC',
-          country: station.country_id
-        });
-      }
-    });
-
-    console.log(`✅ IOC: Fetched ${Math.min(stations.length, 20)} water level stations`);
-  } catch (error) {
-    console.error('❌ IOC API Error:', error.message);
-  }
-}
-
-/**
- * Fetch NOAA water level data
- */
-async function fetchNOAAWaterLevels() {
-  try {
-    // Get active NOAA stations
-    const stationsResponse = await axios.get(NOAA_STATIONS_API, {
-      timeout: 10000,
-      params: { type: 'waterlevels' }
-    });
-
-    const stations = stationsResponse.data.stations || [];
-    
-    // Fetch latest data for first 10 stations
-    for (let i = 0; i < Math.min(stations.length, 10); i++) {
-      const station = stations[i];
-      
-      try {
-        const dataResponse = await axios.get(
-          `${NOAA_PREDICTIONS_API}?station=${station.id}&begin_date=20240101&end_date=20240131&product=water_level&datum=MLLW`,
-          { timeout: 5000 }
-        );
-
-        const predictions = dataResponse.data.predictions || [];
-        if (predictions.length > 0) {
-          const latest = predictions[predictions.length - 1];
-          
-          alertSystem.addWaterLevel({
-            station: station.id,
-            name: station.name,
-            latitude: station.lat,
-            longitude: station.lng,
-            level: latest.v,
-            timestamp: latest.t,
-            source: 'NOAA',
-            state: station.state
-          });
-        }
-      } catch (error) {
-        // Continue with next station
-        continue;
-      }
-    }
-
-    console.log(`✅ NOAA: Fetched water level data from ${Math.min(stations.length, 10)} stations`);
-  } catch (error) {
-    console.error('❌ NOAA API Error:', error.message);
-  }
-}
-
 // ==================== DATA POLLING ====================
 
 // Fetch earthquakes on startup and periodically
 fetchUSGSEarthquakes();
 setInterval(fetchUSGSEarthquakes, EARTHQUAKE_POLL_INTERVAL);
-
-// Fetch water levels on startup and periodically
-setTimeout(() => {
-  fetchIOCWaterLevels();
-  fetchNOAAWaterLevels();
-}, 2000);
-
-setInterval(() => {
-  fetchIOCWaterLevels();
-}, WATER_LEVEL_POLL_INTERVAL);
-
-setInterval(() => {
-  fetchNOAAWaterLevels();
-}, WATER_LEVEL_POLL_INTERVAL * 2);
 
 // ==================== REST API ENDPOINTS ====================
 
@@ -352,6 +433,26 @@ app.post('/api/earthquake', (req, res) => {
   broadcastUpdate({
     type: 'new_earthquake',
     data: earthquake
+  });
+
+  // Check for foreshock clusters
+  const clusters = alertSystem.detectClusters(1440, 100);
+  const alerts = clusters.filter(c => c.foreshock_probability > 30);
+  
+  if (alerts.length > 0) {
+    broadcastUpdate({
+      type: 'foreshock_alert',
+      data: {
+        high_probability: alerts.filter(a => a.foreshock_probability > 60),
+        moderate_probability: alerts.filter(a => a.foreshock_probability >= 30 && a.foreshock_probability <= 60)
+      }
+    });
+  }
+
+  // Broadcast updated forecast
+  broadcastUpdate({
+    type: 'forecast_update',
+    data: alertSystem.getForecast(24)
   });
 
   res.json({
@@ -385,34 +486,6 @@ app.get('/api/earthquakes/:id', (req, res) => {
   }
 
   res.json(earthquake);
-});
-
-/**
- * GET /api/water-levels
- * Get water level data
- */
-app.get('/api/water-levels', (req, res) => {
-  res.json({
-    total_readings: alertSystem.waterLevels.length,
-    recent: alertSystem.waterLevels.slice(-50),
-    water_levels: alertSystem.waterLevels
-  });
-});
-
-/**
- * GET /api/water-levels/station/:station
- * Get water levels for specific station
- */
-app.get('/api/water-levels/station/:station', (req, res) => {
-  const readings = alertSystem.waterLevels.filter(w => 
-    w.station === req.params.station
-  );
-  
-  res.json({
-    station: req.params.station,
-    count: readings.length,
-    readings: readings
-  });
 });
 
 /**
@@ -451,22 +524,6 @@ app.get('/api/data-sources', (req, res) => {
         update_frequency: '1 minute',
         coverage: 'Global',
         status: 'Active'
-      },
-      {
-        name: 'IOC Sealevel Monitoring',
-        type: 'Water Levels',
-        url: 'https://www.ioc-sealevelmonitoring.org',
-        update_frequency: '5 minutes',
-        coverage: 'Global Tide Gauge Stations',
-        status: 'Active'
-      },
-      {
-        name: 'NOAA Water Levels',
-        type: 'Water Levels & Predictions',
-        url: 'https://www.noaa.gov',
-        update_frequency: '5 minutes',
-        coverage: 'USA Coastal Stations',
-        status: 'Active'
       }
     ],
     last_updated: alertSystem.stats.lastUpdated
@@ -483,9 +540,85 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date(),
     uptime: process.uptime(),
     earthquakes_count: alertSystem.stats.totalEarthquakes,
-    water_level_readings: alertSystem.waterLevels.length,
     connected_clients: alertSystem.connectedDevices,
     data_status: alertSystem.stats.dataStatus
+  });
+});
+
+/**
+ * GET /api/foreshocks
+ * Get detected foreshock clusters
+ */
+app.get('/api/foreshocks', (req, res) => {
+  const timeWindowMinutes = parseInt(req.query.window) || 1440; // Default 24 hours
+  const spatialRadiusKm = parseInt(req.query.radius) || 100; // Default 100km
+  
+  const clusters = alertSystem.detectClusters(timeWindowMinutes, spatialRadiusKm);
+  
+  res.json({
+    status: 'success',
+    timestamp: new Date(),
+    parameters: {
+      time_window_minutes: timeWindowMinutes,
+      spatial_radius_km: spatialRadiusKm
+    },
+    total_clusters: clusters.length,
+    foreshock_clusters: clusters,
+    summary: {
+      high_probability: clusters.filter(c => c.foreshock_probability > 60).length,
+      moderate_probability: clusters.filter(c => c.foreshock_probability >= 30 && c.foreshock_probability <= 60).length,
+      low_probability: clusters.filter(c => c.foreshock_probability < 30).length
+    }
+  });
+});
+
+/**
+ * GET /api/forecast
+ * Get 24-hour earthquake forecast with main shock probability
+ */
+app.get('/api/forecast', (req, res) => {
+  const hours = parseInt(req.query.hours) || 24;
+  const forecast = alertSystem.getForecast(hours);
+  
+  res.json({
+    status: 'success',
+    timestamp: new Date(),
+    ...forecast
+  });
+});
+
+/**
+ * GET /api/clusters/:id
+ * Get detailed information about a specific cluster
+ */
+app.get('/api/clusters/:id', (req, res) => {
+  const clusters = alertSystem.detectClusters();
+  const cluster = clusters.find(c => c.id === parseInt(req.params.id));
+  
+  if (!cluster) {
+    return res.status(404).json({
+      error: 'Cluster not found',
+      cluster_id: req.params.id
+    });
+  }
+  
+  res.json({
+    status: 'success',
+    cluster: cluster,
+    analysis: {
+      magnitude_trend_analysis: {
+        trend: cluster.magnitude_trend,
+        min: cluster.min_magnitude,
+        max: cluster.max_magnitude,
+        average: cluster.avg_magnitude
+      },
+      foreshock_indicators: {
+        probability_percentage: cluster.foreshock_probability,
+        member_count: cluster.member_count,
+        spatial_density: (cluster.member_count / 100).toFixed(2),
+        time_span_minutes: (cluster.last_update - cluster.created_at) / 60000
+      }
+    }
   });
 });
 
@@ -506,7 +639,7 @@ app.use((req, res) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════════════════════╗
-║  EARTHQUAKE & WATER LEVEL MONITORING SYSTEM           ║
+║  EARTHQUAKE MONITORING SYSTEM                         ║
 ║         Real-time Data Aggregator                     ║
 ╠════════════════════════════════════════════════════════╣
 ║  Server running on: http://0.0.0.0:${PORT}
@@ -515,8 +648,6 @@ server.listen(PORT, '0.0.0.0', () => {
 ║  API Docs: http://localhost:${PORT}/api/health
 ║  Data Sources:
 ║    • USGS Earthquake Hazards (1 min updates)
-║    • IOC Sealevel Monitoring (5 min updates)
-║    • NOAA Water Levels (5 min updates)
 ╚════════════════════════════════════════════════════════╝
   `);
 });

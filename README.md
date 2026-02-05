@@ -1,8 +1,8 @@
-# 🌍 Earthquake & Water Level Monitoring System
+# 🌍 Earthquake Monitoring System
 
-Real-time global earthquake and water level monitoring dashboard powered by public APIs.
+Real-time global earthquake monitoring dashboard powered by USGS API.
 
-**No physical sensors required!** Pure cloud-based data aggregation from USGS, IOC, and NOAA.
+**No physical sensors required!** Pure cloud-based data aggregation from USGS.
 
 ---
 
@@ -13,12 +13,6 @@ Real-time global earthquake and water level monitoring dashboard powered by publ
 - Magnitude, location, depth information
 - Live updates every 60 seconds
 - 200+ event history
-
-🌊 **Water Level Tracking**
-- Global tide gauge stations (IOC)
-- USA coastal data (NOAA)
-- Real-time water level readings
-- 500+ data point history
 
 📊 **Interactive Dashboard**
 - Live statistics & analytics
@@ -34,9 +28,8 @@ Real-time global earthquake and water level monitoring dashboard powered by publ
 
 📈 **Data & Export**
 - Download earthquake data as JSON
-- Export water level readings
 - Historical data backup
-- Multi-source attribution
+- USGS data attribution
 
 ---
 
@@ -61,8 +54,6 @@ npm start
 | Source | Type | Coverage | Update Rate |
 |--------|------|----------|-------------|
 | **USGS** | Earthquakes 🌍 | Global | 1 min |
-| **IOC** | Water Levels 🌊 | 190+ stations | 5 min |
-| **NOAA** | Water Levels 📊 | USA Coastal | 10 min |
 
 ---
 
@@ -71,7 +62,7 @@ npm start
 ```
 ┌─────────────────────────────┐
 │   External Data Sources     │
-│  USGS / IOC / NOAA APIs     │
+│       USGS API              │
 └──────────────┬──────────────┘
                │
                ↓
@@ -108,7 +99,7 @@ npm start
 Total Earthquakes: 145
 Max Magnitude: 6.8
 Average Magnitude: 4.2
-Data Sources: USGS, IOC, NOAA
+Data Source: USGS
 ```
 
 ### 2. Earthquake Table
@@ -121,19 +112,9 @@ Displays all detected earthquakes with:
 - Timestamp
 - Data source attribution
 
-### 3. Water Levels Table
-Shows real-time water level data from:
-- Station code & name
-- Current water level
-- Station location
-- Country / State
-- Data timestamp
-
-### 4. Data Sources Status
+### 3. Data Sources Status
 Visual indicators for:
 - USGS Earthquake API status ✓
-- IOC Water Level Monitoring ✓
-- NOAA Water Levels API ✓
 
 ---
 
@@ -159,11 +140,6 @@ curl -X POST http://localhost:3000/api/earthquake \
   }'
 ```
 
-**GET /api/water-levels**
-```bash
-curl http://localhost:3000/api/water-levels
-```
-
 **GET /api/stats**
 ```bash
 curl http://localhost:3000/api/stats
@@ -184,7 +160,6 @@ Event `init`: Initial data load
   "type": "init",
   "data": {
     "earthquakes": [...],
-    "waterLevels": [...],
     "stats": {...}
   }
 }
@@ -210,7 +185,6 @@ Event `new_earthquake`: New earthquake detected
 ## 📋 System Specifications
 
 - **Earthquake Records**: 200 max (in memory)
-- **Water Level Readings**: 500 max (in memory)
 - **Magnitude Alert Threshold**: 4.0 Richter
 - **Max Concurrent WebSocket Clients**: 10+
 - **API Response Time**: <500ms
@@ -234,8 +208,6 @@ Event `new_earthquake`: New earthquake detected
 
 **Data Sources:**
 - USGS Earthquake Hazards API
-- IOC Sealevel Monitoring API
-- NOAA Water Levels API
 
 ---
 
@@ -326,8 +298,6 @@ docker run -p 3000:3000 earthquake-monitor
 | Component | Interval | Source |
 |-----------|----------|--------|
 | Earthquakes | 60 seconds | USGS |
-| IOC Water Levels | 5 minutes | IOC |
-| NOAA Water Levels | 10 minutes | NOAA |
 | Dashboard Refresh | Real-time | WebSocket |
 
 ---
@@ -413,8 +383,6 @@ PORT=3001 npm start
 ## 🔗 External Resources
 
 - [USGS Earthquake Hazards](https://earthquake.usgs.gov/)
-- [IOC Sealevel Monitoring](https://www.ioc-sealevelmonitoring.org/)
-- [NOAA Water Levels](https://www.noaa.gov/)
 - [Express.js Documentation](https://expressjs.com/)
 - [WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
 
@@ -439,4 +407,4 @@ MIT License - Feel free to use and modify
 **Status**: Production Ready ✅  
 **Last Updated**: February 4, 2024  
 
-Built with ❤️ for global earthquake & water level monitoring
+Built with ❤️ for global earthquake monitoring

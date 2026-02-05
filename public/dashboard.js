@@ -15,7 +15,6 @@ const CONFIG = {
 let ws = null;
 let chart = null;
 let earthquakesData = [];
-let waterLevelsData = [];
 let isConnected = false;
 
 // ==================== INITIALIZATION ====================
@@ -66,6 +65,9 @@ function handleWebSocketMessage(message) {
         case 'init':
             handleInitMessage(data);
             break;
+        case 'new_earthquake':
+            handleNewEarthquake(data);
+            break;
         case 'new_alert':
             handleNewAlert(data);
             break;
@@ -77,6 +79,15 @@ function handleWebSocketMessage(message) {
             break;
         case 'alerts_cleared':
             handleAlertsCleared();
+            break;
+        case 'water_level_update':
+            handleWaterLevelUpdate(data);
+            break;
+        case 'foreshock_alert':
+            handleForeshockAlert(data);
+            break;
+        case 'forecast_update':
+            handleForecastUpdate(data);
             break;
         default:
             console.log('Unknown message type:', type);
@@ -90,11 +101,6 @@ function handleInitMessage(data) {
         earthquakesData = data.earthquakes;
         updateEarthquakesTable();
         updateChart();
-    }
-
-    if (data.waterLevels) {
-        waterLevelsData = data.waterLevels;
-        updateWaterLevelsTable();
     }
 
     if (data.stats) {
@@ -114,20 +120,9 @@ function handleNewEarthquake(earthquake) {
     showNotification(`🌍 Earthquake! ${earthquake.magnitude} magnitude at ${earthquake.location}`, 'alert');
 }
 
-function handleWaterLevelUpdate(data) {
-    waterLevelsData.push(data);
-    
-    // Keep only last 100 readings
-    if (waterLevelsData.length > 100) {
-        waterLevelsData.shift();
-    }
-    
-    updateWaterLevelsTable();
-}
-
 function handleDeviceStatus(data) {
     const statusElement = document.getElementById('deviceStatus');
-    statusElement.textContent = 'USGS + IOC/NOAA';
+    statusElement.textContent = 'USGS';
     statusElement.classList.add('connected');
 }
 
@@ -136,6 +131,52 @@ function handleAlertsCleared() {
     updateEarthquakesTable();
     updateChart();
     showNotification('Earthquake history cleared', 'success');
+}
+
+// ==================== FORESHOCK & FORECAST HANDLERS ====================
+
+function handleForeshockAlert(data) {
+    console.log('Foreshock alert received:', data);
+    
+    const { high_probability, moderate_probability } = data;
+    
+    // Alert if high probability events detected
+    if (high_probability && high_probability.length > 0) {
+        const message = `🚨 HIGH RISK: ${high_probability.length} high-probability foreshock cluster detected!`;
+        showNotification(message, 'danger');
+        playAlertSound();
+    }
+    
+    // Warn about moderate probability events
+    if (moderate_probability && moderate_probability.length > 0) {
+        const message = `⚠️ CAUTION: ${moderate_probability.length} moderate-probability foreshock cluster detected`;
+        showNotification(message, 'warning');
+    }
+    
+    // Update foreshock display
+    updateForeshockDisplay(data);
+}
+
+function handleForecastUpdate(data) {
+    console.log('Forecast update received:', data);
+    
+    if (data && data.alerts) {
+        updateForecastWidget(data);
+    }
+}
+
+function handleWaterLevelUpdate(data) {
+    console.log('Water level update received:', data);
+    // This handler may be called for water level updates
+    updateWaterLevelsTable();
+}
+
+function handleNewAlert(data) {
+    console.log('New alert received:', data);
+}
+
+function handleSensorUpdate(data) {
+    console.log('Sensor update received:', data);
 }
 
 // ==================== CHART INITIALIZATION ====================
@@ -293,33 +334,6 @@ function updateEarthquakesTable() {
         .join('');
 }
 
-function updateWaterLevelsTable() {
-    const tbody = document.getElementById('waterLevelBody');
-
-    if (waterLevelsData.length === 0) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No water level data</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = waterLevelsData
-        .slice(-20) // Show last 20
-        .map(wl => {
-            const time = new Date(wl.timestamp).toLocaleString();
-            return `
-                <tr>
-                    <td>${wl.station}</td>
-                    <td>${wl.country || wl.state || 'Unknown'}</td>
-                    <td>${(wl.latitude || 0).toFixed(2)}</td>
-                    <td>${(wl.longitude || 0).toFixed(2)}</td>
-                    <td>${(wl.level || 0).toFixed(2)} m</td>
-                    <td>${wl.source}</td>
-                    <td>${time}</td>
-                </tr>
-            `;
-        })
-        .join('');
-}
-
 function getSeverity(magnitude) {
     if (magnitude >= 7.0) {
         return { label: 'MAJOR', class: 'high' };
@@ -376,8 +390,7 @@ async function exportData() {
         const dataToExport = {
             timestamp: new Date().toISOString(),
             totalEarthquakes: earthquakesData.length,
-            earthquakes: earthquakesData,
-            waterLevels: waterLevelsData
+            earthquakes: earthquakesData
         };
 
         const dataStr = JSON.stringify(dataToExport, null, 2);
@@ -407,7 +420,108 @@ async function refreshData() {
     }
 }
 
-// ==================== NOTIFICATIONS ==================== 
+// ==================== FORESHOCK & FORECAST DISPLAY ====================
+
+function updateForeshockDisplay(data) {
+    // Create or update foreshock alert container
+    let container = document.getElementById('foreshockAlerts');
+    
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'foreshockAlerts';
+        container.className = 'foreshock-alerts-container';
+        
+        // Insert before the earthquakes table
+        const tableSection = document.getElementById('alertsTableBody')?.parentElement?.parentElement;
+        if (tableSection) {
+            tableSection.parentElement.insertBefore(container, tableSection);
+        }
+    }
+    
+    let html = '';
+    
+    if (data.high_probability && data.high_probability.length > 0) {
+        html += '<div class="alert alert-danger foreshock-high-risk">';
+        html += '<strong>🚨 HIGH RISK: Foreshock Activity Detected</strong><br>';
+        data.high_probability.forEach(alert => {
+            html += `<p>${alert.member_count} events clustered • Probability: ${alert.foreshock_probability}% • Magnitude: ${alert.max_magnitude.toFixed(2)}+</p>`;
+        });
+        html += '</div>';
+    }
+    
+    if (data.moderate_probability && data.moderate_probability.length > 0) {
+        html += '<div class="alert alert-warning foreshock-moderate-risk">';
+        html += '<strong>⚠️ CAUTION: Moderate Foreshock Activity</strong><br>';
+        data.moderate_probability.forEach(alert => {
+            html += `<p>${alert.member_count} events clustered • Probability: ${alert.foreshock_probability}% • Magnitude: ${alert.max_magnitude.toFixed(2)}+</p>`;
+        });
+        html += '</div>';
+    }
+    
+    container.innerHTML = html || '<p class="text-muted">No foreshock clusters detected</p>';
+}
+
+function updateForecastWidget(forecast) {
+    // Create or update forecast widget
+    let widget = document.getElementById('forecastWidget');
+    
+    if (!widget) {
+        widget = document.createElement('div');
+        widget.id = 'forecastWidget';
+        widget.className = 'forecast-widget card';
+        
+        // Insert in statistics area
+        const statsSection = document.querySelector('.statistics');
+        if (statsSection) {
+            statsSection.appendChild(widget);
+        }
+    }
+    
+    let riskLevel = 'Low';
+    let riskColor = 'success';
+    
+    if (forecast.summary.max_probability > 60) {
+        riskLevel = 'High';
+        riskColor = 'danger';
+    } else if (forecast.summary.max_probability > 30) {
+        riskLevel = 'Moderate';
+        riskColor = 'warning';
+    }
+    
+    let html = `
+        <h4>24-Hour Forecast</h4>
+        <div class="forecast-content">
+            <div class="risk-gauge">
+                <div class="gauge-circle ${riskColor}">
+                    <div class="gauge-percentage">${forecast.summary.max_probability}%</div>
+                </div>
+                <p class="risk-label text-${riskColor}">${riskLevel} Risk</p>
+            </div>
+            <div class="forecast-stats">
+                <p><strong>Active Clusters:</strong> ${forecast.total_clusters}</p>
+                <p><strong>High Probability:</strong> ${forecast.summary.high_probability_events}</p>
+                <p><strong>Moderate Probability:</strong> ${forecast.summary.moderate_probability_events}</p>
+                <p class="text-muted"><small>Updated: ${new Date(forecast.forecast_generated_at).toLocaleTimeString()}</small></p>
+            </div>
+        </div>
+    `;
+    
+    // Add detailed alerts if any
+    if (forecast.alerts && forecast.alerts.length > 0) {
+        html += '<div class="forecast-alerts"><strong>Active Alerts:</strong>';
+        forecast.alerts.forEach(alert => {
+            const alertClass = alert.alert_level === 'HIGH' ? 'alert-danger' : 'alert-warning';
+            html += `<div class="alert ${alertClass}">`;
+            html += `<p>${alert.alert_level}: ${alert.probability}% probability, ${alert.cluster_size} events</p>`;
+            html += `</div>`;
+        });
+        html += '</div>';
+    }
+    
+    widget.innerHTML = html;
+}
+
+// ==================== NOTIFICATIONS ====================
 function showNotification(message, type = 'info') {
     console.log(`[${type.toUpperCase()}] ${message}`);
     

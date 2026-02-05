@@ -1,8 +1,8 @@
-# 🌍 Earthquake & Water Level Monitoring System
+# 🌍 Earthquake Monitoring System
 
 ## Real-time Data Aggregator (No Physical Sensors Required)
 
-This system aggregates real-time data from public APIs to monitor earthquakes and water levels globally.
+This system aggregates real-time data from public APIs to monitor earthquakes globally.
 
 ---
 
@@ -20,30 +20,6 @@ This system aggregates real-time data from public APIs to monitor earthquakes an
   - Place name
   - Timestamp
   - Tsunami alert status
-
-### 2. IOC Sealevel Monitoring
-**🌊 Water Levels**
-- **URL**: https://www.ioc-sealevelmonitoring.org/api/v1/
-- **Update Frequency**: 5 minutes
-- **Coverage**: Global tide gauge stations (190+ stations)
-- **Data Provided**:
-  - Station code & name
-  - Water level readings
-  - Station location (lat/lon)
-  - Country
-  - Historical data
-
-### 3. NOAA Water Levels & Predictions
-**📊 USA Coastal Data**
-- **URL**: https://api.waterlevels.noaa.gov/
-- **Update Frequency**: 5 minutes
-- **Coverage**: USA Coastal monitoring stations
-- **Data Provided**:
-  - Real-time water level
-  - Predictions
-  - Station name & location
-  - State
-  - Datum information
 
 ---
 
@@ -78,11 +54,6 @@ Server will start on `http://localhost:3000`
 - Magnitude, location, depth
 - Timestamp and source
 
-✅ **Water Level Monitoring**
-- Global tide gauge stations
-- Station information and readings
-- Source attribution (IOC/NOAA)
-
 ✅ **Statistics & Analytics**
 - Total earthquakes detected
 - Maximum magnitude
@@ -91,7 +62,6 @@ Server will start on `http://localhost:3000`
 
 ✅ **Data Export**
 - Download earthquake data as JSON
-- Download water level readings
 - Historical data backup
 
 ✅ **Real-time Updates**
@@ -135,20 +105,6 @@ curl -X DELETE http://localhost:3000/api/earthquakes
 ```
 Clear earthquake history
 
-### Water Levels
-
-**GET /api/water-levels**
-```bash
-curl http://localhost:3000/api/water-levels
-```
-Response: All water level readings
-
-**GET /api/water-levels/station/:station**
-```bash
-curl http://localhost:3000/api/water-levels/station/SF
-```
-Response: Readings for specific station
-
 ### System
 
 **GET /api/stats**
@@ -186,7 +142,6 @@ const ws = new WebSocket('ws://localhost:3000/ws');
   "type": "init",
   "data": {
     "earthquakes": [...],
-    "waterLevels": [...],
     "stats": {...}
   }
 }
@@ -235,20 +190,6 @@ const ws = new WebSocket('ws://localhost:3000/ws');
 }
 ```
 
-### Water Level Object
-```json
-{
-  "station": "SF",
-  "name": "San Francisco",
-  "latitude": 37.8,
-  "longitude": -122.4,
-  "level": 0.85,
-  "timestamp": "2024-02-04T10:35:00Z",
-  "source": "NOAA",
-  "state": "CA"
-}
-```
-
 ---
 
 ## 🔄 Data Refresh Rates
@@ -256,15 +197,12 @@ const ws = new WebSocket('ws://localhost:3000/ws');
 | Source | Type | Interval |
 |--------|------|----------|
 | USGS | Earthquakes | 1 minute |
-| IOC | Water Levels | 5 minutes |
-| NOAA | Water Levels | 10 minutes |
 
 ---
 
 ## 📈 System Specifications
 
 - **Total Earthquake Records**: Up to 200 (in memory)
-- **Water Level Readings**: Up to 500 (in memory)
 - **Magnitude Threshold**: 4.0 (alert level)
 - **WebSocket Connections**: 10+ concurrent
 - **Update Latency**: < 100ms
@@ -340,8 +278,6 @@ npm start  # Watch for error messages
 ## 🔗 External Resources
 
 - [USGS Earthquake API](https://earthquake.usgs.gov/earthquakes/feed/v1.0/)
-- [IOC Sealevel Monitoring](https://www.ioc-sealevelmonitoring.org/)
-- [NOAA Water Levels API](https://api.waterlevels.noaa.gov/)
 - [USGS GeoJSON Documentation](https://earthquake.usgs.gov/earthquakes/feed/)
 
 ---

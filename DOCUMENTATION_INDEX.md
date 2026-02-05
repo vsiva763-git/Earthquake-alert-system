@@ -125,9 +125,6 @@ GET  /api/earthquakes           # Get all
 POST /api/earthquake            # Add one
 DELETE /api/earthquakes         # Clear
 
-# Water Levels
-GET  /api/water-levels          # Get all
-
 # System
 GET  /api/data-sources          # Data source status
 GET  /api/stats                 # Statistics
@@ -174,31 +171,17 @@ http://localhost:3000
 - **Update Rate**: Every 60 seconds
 - **Documentation**: [API_DATASOURCES.md](API_DATASOURCES.md#1-usgs-earthquake-hazards-program)
 
-### IOC Water Levels 🌊
-- **Endpoint**: https://www.ioc-sealevelmonitoring.org/api/v1/station/
-- **Coverage**: 190+ global stations
-- **Update Rate**: Every 5 minutes
-- **Documentation**: [API_DATASOURCES.md](API_DATASOURCES.md#2-ioc-sealevel-monitoring)
-
-### NOAA Water Levels 📊
-- **Endpoint**: https://api.waterlevels.noaa.gov/
-- **Coverage**: USA coastal
-- **Update Rate**: Every 10 minutes
-- **Documentation**: [API_DATASOURCES.md](API_DATASOURCES.md#3-noaa-water-levels--predictions)
-
 ---
 
 ## ✨ System Features
 
 ### Real-time Monitoring
 - ✅ Global earthquake tracking
-- ✅ Water level monitoring (190+ stations)
 - ✅ Real-time updates via WebSocket
 - ✅ Live statistics & analytics
 
 ### Data Management
 - ✅ Store 200 earthquakes
-- ✅ Store 500 water level readings
 - ✅ Export to JSON
 - ✅ Clear history function
 
@@ -225,7 +208,6 @@ http://localhost:3000
 | Server Port | 3000 |
 | WebSocket Path | /ws |
 | Max Earthquakes | 200 |
-| Max Water Levels | 500 |
 | Alert Threshold | 4.0 Richter |
 | Update Latency | <100ms |
 | API Response | <500ms |
@@ -295,7 +277,7 @@ docker run -p 3000:3000 earthquake-monitor
 
 ## 🏁 Ready to Launch!
 
-Your Earthquake & Water Level Monitoring System is **complete**, **tested**, **documented**, and **ready for deployment**!
+Your Earthquake Monitoring System is **complete**, **tested**, **documented**, and **ready for deployment**!
 
 ### Next Steps
 1. Read [QUICK_START.md](QUICK_START.md) (2 min)
@@ -304,7 +286,7 @@ Your Earthquake & Water Level Monitoring System is **complete**, **tested**, **d
 4. Open `http://localhost:3000`
 
 ### Done! 🎉
-You're now monitoring global earthquakes and water levels in real-time!
+You're now monitoring global earthquakes in real-time!
 
 ---
 

@@ -177,6 +177,7 @@ body {
 /* ==================== SECTIONS ==================== */
 .data-sources,
 .sensor-section,
+.foreshock-section,
 .chart-section,
 .alerts-section,
 .controls-section {
@@ -188,6 +189,7 @@ body {
 
 .sensor-section h2,
 .data-sources h2,
+.foreshock-section h2,
 .chart-section h2,
 .alerts-section h2,
 .controls-section h2 {
@@ -548,6 +550,158 @@ body {
 .sensor-card,
 .alerts-table tbody tr {
     animation: fadeIn 0.5s ease;
+}
+
+/* ==================== FORESHOCK ALERTS ==================== */
+.foreshock-alerts-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.foreshock-high-risk,
+.foreshock-moderate-risk {
+    padding: 20px;
+    border-radius: 10px;
+    border-left: 5px solid;
+    margin-bottom: 15px;
+}
+
+.foreshock-high-risk {
+    background: rgba(220, 53, 69, 0.1);
+    border-left-color: #dc3545;
+    color: #dc3545;
+}
+
+.foreshock-high-risk strong {
+    color: #dc3545;
+}
+
+.foreshock-moderate-risk {
+    background: rgba(255, 193, 7, 0.1);
+    border-left-color: #ffc107;
+    color: #ffe082;
+}
+
+.foreshock-moderate-risk strong {
+    color: #ffc107;
+}
+
+.foreshock-alerts-container p {
+    margin: 5px 0;
+}
+
+/* ==================== FORECAST WIDGET ==================== */
+.forecast-widget {
+    background: var(--card-bg);
+    padding: 25px;
+    border-radius: 12px;
+    border-top: 3px solid var(--primary-color);
+    margin-top: 20px;
+}
+
+.forecast-widget h4 {
+    margin-bottom: 20px;
+    font-size: 18px;
+    color: var(--primary-color);
+}
+
+.forecast-content {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 25px;
+    margin-bottom: 20px;
+}
+
+.risk-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.gauge-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 10px;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.gauge-circle.success {
+    background: linear-gradient(135deg, #28a745, #20c997);
+}
+
+.gauge-circle.warning {
+    background: linear-gradient(135deg, #ffc107, #ff9800);
+}
+
+.gauge-circle.danger {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+.gauge-percentage {
+    font-size: 32px;
+    font-weight: bold;
+}
+
+.risk-label {
+    text-align: center;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.forecast-stats {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.forecast-stats p {
+    margin: 8px 0;
+    color: var(--text-color);
+}
+
+.forecast-alerts {
+    margin-top: 15px;
+    border-top: 1px solid rgba(255, 107, 107, 0.3);
+    padding-top: 15px;
+}
+
+.forecast-alerts strong {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--primary-color);
+}
+
+.forecast-alerts .alert {
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    border-radius: 6px;
+}
+
+.forecast-alerts .alert-danger {
+    background: rgba(220, 53, 69, 0.1);
+    border-left: 3px solid #dc3545;
+    color: #dc3545;
+}
+
+.forecast-alerts .alert-warning {
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+    color: #ffe082;
+}
+
+.forecast-alerts .alert p {
+    margin: 0;
+    font-size: 14px;
 }
 
 /* ==================== SCROLLBAR ==================== */
