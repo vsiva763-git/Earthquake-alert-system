@@ -5,6 +5,7 @@ from typing import Deque, Dict, List
 
 import pandas as pd
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.schemas import HealthResponse, PredictRequest, PredictResponse
 from src.alert_classifier import classify_alert
@@ -13,7 +14,17 @@ from src.feature_engineering import assign_seismic_zone
 from src.predict import predict_event
 
 app = FastAPI(title="Earthquake Prediction API", version="1.0.0")
-LATEST_ALERTS: Deque[Dict] = deque(maxlen=10)
+
+# Add CORS middleware for React dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+LATEST_ALERTS: Deque[Dict] = deque(maxlen=50)
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -42,6 +53,10 @@ async def predict(payload: PredictRequest) -> PredictResponse:
         location="India",
         timestamp=datetime.now(timezone.utc),
         recommendation=_recommendation(alert_level),
+        latitude=payload.latitude,
+        longitude=payload.longitude,
+        depth_km=payload.depth_km,
+        seismic_zone=zone,
     )
     LATEST_ALERTS.appendleft(response.model_dump())
     return response
@@ -50,6 +65,37 @@ async def predict(payload: PredictRequest) -> PredictResponse:
 @app.get("/latest-alerts")
 async def latest_alerts() -> List[Dict]:
     return list(LATEST_ALERTS)
+
+
+@app.post("/alert")
+async def create_alert(payload: PredictRequest) -> Dict:
+    """Manual alert creation endpoint for testing or IoT feedback"""
+    recent_events = [event.model_dump() for event in payload.recent_events]
+    result = predict_event(
+        lat=payload.latitude,
+        lon=payload.longitude,
+        depth_km=payload.depth_km,
+        recent_events=recent_events,
+    )
+
+    magnitude = result["predicted_magnitude"]
+    zone = int(result["seismic_zone"])
+    alert_level = classify_alert(magnitude, zone)
+
+    alert = {
+        "predicted_magnitude": magnitude,
+        "alert_level": alert_level,
+        "confidence": result["confidence"],
+        "location": "India",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "recommendation": _recommendation(alert_level),
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "depth_km": payload.depth_km,
+        "seismic_zone": zone,
+    }
+    LATEST_ALERTS.appendleft(alert)
+    return {"status": "alert_created", "alert": alert}
 
 
 @app.get("/live-feed")
@@ -96,6 +142,10 @@ async def live_feed() -> Dict:
         "location": latest.get("place", "India"),
         "timestamp": latest["time"],
         "recommendation": _recommendation(alert_level),
+        "latitude": float(latest["latitude"]),
+        "longitude": float(latest["longitude"]),
+        "depth_km": float(latest["depth"]),
+        "seismic_zone": int(result["seismic_zone"]),
     }
     LATEST_ALERTS.appendleft(payload)
     return payload

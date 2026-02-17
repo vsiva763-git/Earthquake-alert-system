@@ -28,6 +28,10 @@ class PredictResponse(BaseModel):
     location: str
     timestamp: datetime
     recommendation: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    depth_km: Optional[float] = None
+    seismic_zone: Optional[int] = None
 
 
 class HealthResponse(BaseModel):
