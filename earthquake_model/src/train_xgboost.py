@@ -8,7 +8,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
 
-from alert_classifier import classify_alert
+from src.alert_classifier import classify_alert
 
 FEATURES = [
     "latitude",
