@@ -4,6 +4,8 @@ import { useAlertStore } from '../store/alertStore'
 import { EarthquakeMap } from '../components/Map/EarthquakeMap'
 import { AlertFeed } from '../components/Alerts/AlertFeed'
 import { StatCards } from '../components/Stats/StatCards'
+import { ApiStatus } from '../components/Stats/ApiStatus'
+import { SampleDataBar } from '../components/Sample/SampleDataBar'
 import { MagnitudeChart } from '../components/Charts/MagnitudeChart'
 import { AlertPieChart } from '../components/Charts/AlertPieChart'
 import { IoTStatus } from '../components/IoT/IoTStatus'
@@ -27,7 +29,8 @@ export const Dashboard = () => {
           </h1>
           <p className="text-gray-400 text-sm mt-1">India — Real-time Seismic Monitoring</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-6">
+          <ApiStatus />
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
             <span className="text-green-400 text-sm font-semibold">LIVE</span>
@@ -41,11 +44,20 @@ export const Dashboard = () => {
       {/* Error Message */}
       {error && (
         <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 mb-6">
-          <p className="text-red-400 text-sm">
-            ⚠️ Unable to connect to API. Make sure the FastAPI server is running at {import.meta.env.VITE_API_URL}
+          <p className="text-red-400 text-sm font-semibold">
+            ⚠️ Unable to connect to API
+          </p>
+          <p className="text-red-300 text-xs mt-2">
+            Error: {error?.message || 'Unknown error'}
+          </p>
+          <p className="text-gray-400 text-xs mt-1">
+            Check browser console for API URL being used
           </p>
         </div>
       )}
+
+      {/* Sample Data Bar */}
+      <SampleDataBar />
 
       {/* Stat Cards */}
       <StatCards />

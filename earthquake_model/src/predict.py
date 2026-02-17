@@ -13,6 +13,7 @@ from src.feature_engineering import assign_seismic_zone
 from src.train_xgboost import FEATURES
 
 MODELS_CACHE: Dict[str, object] = {}
+TRAINING_DATA: Optional[pd.DataFrame] = None
 
 
 def _load_xgb() -> Optional[XGBRegressor]:
@@ -47,6 +48,96 @@ def _load_fusion() -> Optional[object]:
     model = load_model(model_path)
     MODELS_CACHE["fusion"] = model
     return model
+
+
+def _load_training_data() -> pd.DataFrame:
+    """Load training data for historical comparisons"""
+    global TRAINING_DATA
+    if TRAINING_DATA is not None:
+        return TRAINING_DATA
+    
+    data_path = Path("data/processed/features.csv")
+    if not data_path.exists():
+        # Fallback to notebook data
+        data_path = Path("notebooks/data/processed/usgs_india_clean.csv")
+    
+    if data_path.exists():
+        TRAINING_DATA = pd.read_csv(data_path)
+    else:
+        TRAINING_DATA = pd.DataFrame()
+    
+    return TRAINING_DATA
+
+
+def get_feature_vector(
+    lat: float,
+    lon: float,
+    depth_km: float,
+    recent_events: Optional[List[Dict]] = None
+) -> tuple[np.ndarray, List[str]]:
+    """
+    Returns feature vector and feature names used for prediction
+    """
+    recent_events = _enrich_recent_events(recent_events or [])
+    context = _context_features(lat, lon, depth_km, recent_events)
+    
+    row = {
+        "latitude": lat,
+        "longitude": lon,
+        "depth_km": depth_km,
+        **context,
+    }
+    x_input = pd.DataFrame([row])[FEATURES].fillna(0.0)
+    return x_input.values[0], FEATURES
+
+
+def get_historical_averages(lat: float, lon: float) -> Dict:
+    """
+    Returns historical average stats for the region
+    from the training dataset
+    """
+    try:
+        training_data = _load_training_data()
+        
+        if training_data.empty:
+            return {
+                "avg_magnitude": 3.2,
+                "max_magnitude": 5.1,
+                "avg_depth": 18.0,
+                "total_events": 0,
+                "note": "No regional history — using India baseline"
+            }
+        
+        # Filter training data for nearby region (±2 degrees)
+        nearby = training_data[
+            (training_data['latitude'].between(lat - 2, lat + 2)) &
+            (training_data['longitude'].between(lon - 2, lon + 2))
+        ]
+        
+        if len(nearby) == 0:
+            return {
+                "avg_magnitude": 3.2,
+                "max_magnitude": 5.1,
+                "avg_depth": 18.0,
+                "total_events": 0,
+                "note": "No regional history — using India baseline"
+            }
+        
+        return {
+            "avg_magnitude": round(float(nearby['magnitude'].mean()), 2),
+            "max_magnitude": round(float(nearby['magnitude'].max()), 2),
+            "avg_depth": round(float(nearby['depth_km'].mean()), 2),
+            "total_events": int(len(nearby)),
+            "note": f"Based on {len(nearby)} historical events in ±2° radius"
+        }
+    except Exception as e:
+        return {
+            "avg_magnitude": 3.2,
+            "max_magnitude": 5.1,
+            "avg_depth": 18.0,
+            "total_events": 0,
+            "note": f"Error loading historical data: {str(e)}"
+        }
 
 
 def _enrich_recent_events(
