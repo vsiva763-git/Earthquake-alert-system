@@ -1,0 +1,28 @@
+{
+  "name": "Earthquake Alert System",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "forwardPorts": [8000, 5173],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI Backend",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    },
+    "5173": {
+      "label": "Vite Frontend",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    }
+  },
+  "postCreateCommand": "cd earthquake_model && pip install -r requirements.txt && cd ../earthquake-dashboard && npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

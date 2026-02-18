@@ -2,15 +2,20 @@ import axios from 'axios'
 
 // Auto-detect API URL based on environment
 const getBaseURL = () => {
-  // If explicitly set in .env, use it
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL
+  // If explicitly set in .env and not empty, use it
+  const envUrl = import.meta.env.VITE_API_URL
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl
   }
   
   // In Codespaces, construct the URL based on current hostname
   if (window.location.hostname.includes('app.github.dev')) {
-    const codespaceName = window.location.hostname.split('-').slice(0, -1).join('-')
-    return `https://${codespaceName}-8000.app.github.dev`
+    // Extract codespace name from hostname format: {codespaceName}-{port}.app.github.dev
+    const match = window.location.hostname.match(/^(.+)-\d+\.app\.github\.dev$/)
+    if (match) {
+      const codespaceName = match[1]
+      return `https://${codespaceName}-8000.app.github.dev`
+    }
   }
   
   // Default to localhost for local development
